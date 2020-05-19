@@ -1,0 +1,31 @@
+tosca_definitions_version: tosca_simple_yaml_1_0
+
+metadata:
+  template_name: Gns3CloudProvider
+  template_author: Quali
+  template_version: 1.0.0
+  template_icon: gns3.png
+
+description: >
+  GNS3 Deployment paths.
+
+imports:
+  - cloudshell_standard: cloudshell_cloud_provider_standard_1_0_0.yaml
+
+node_types:
+  GNS3 Emulator From Template:
+    derived_from: cloudshell.nodes.CustomDeploymentOption
+    properties:
+      Template Name:
+        type: string
+        description: Name of the template.
+        tags: [user_input,editable_only_in_app_template]
+      Additional Configuration:
+        type: string
+        default:
+        description: '{"": "", "": {"": ""}}'
+        tags: [user_input]
+    artifacts:
+      icon:
+        file: gns3.png
+        type: tosca.artifacts.File
