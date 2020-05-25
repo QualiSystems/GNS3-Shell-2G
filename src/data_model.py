@@ -163,21 +163,6 @@ class Gns3CloudProviderDataModel(object):
         self.attributes['Gns3 Cloud Provider.GNS3 Version'] = value
 
     @property
-    def name(self):
-        """
-        :rtype: str
-        """
-        return self._name
-
-    @name.setter
-    def name(self, value):
-        """
-        
-        :type value: str
-        """
-        self._name = value
-
-    @property
     def user(self):
         """
         """

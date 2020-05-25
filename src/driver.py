@@ -7,7 +7,6 @@ from cloudshell.cp.core.models import DriverResponse, DeployApp, PrepareCloudInf
     CreateKeysActionResult, ActionResultBase, ConnectSubnet
 from cloudshell.shell.core.driver_context import InitCommandContext, AutoLoadCommandContext, AutoLoadDetails, \
     ResourceRemoteCommandContext
-from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionContext
 from cloudshell.shell.core.session.logging_session import LoggingSessionContext
 
 from data_model import Gns3CloudProviderDataModel
@@ -16,8 +15,8 @@ from gns3.flows.gns3_deployment import GNS3Deployment
 from gns3.flows.gns3_helper import Gns3Helper
 from gns3.flows.gns3_state_flows import GNS3StateFlow
 from gns3.instance_details import create_vm_instance_details
-from gns3.rest_client.rest_api_handler import RestJsonClient
-from gns3.shell_helper import create_vm_details, set_command_result
+from gns3.rest_client.rest_api_handler import RestJsonClient, RestClientException
+from gns3.helpers.shell_helper import create_vm_details, set_command_result
 
 
 class Gns3CloudProviderDriver(ResourceDriverInterface):
@@ -74,7 +73,7 @@ class Gns3CloudProviderDriver(ResourceDriverInterface):
         actions = DriverRequestParser().convert_driver_request_to_actions(request)
         resource_config = Gns3CloudProviderDataModel.create_from_context(context)
         with LoggingSessionContext(context) as logger:
-
+            logger.info(request)
             deploy_action = None
             subnet_actions = list()
             for action in actions:
@@ -110,39 +109,39 @@ class Gns3CloudProviderDriver(ResourceDriverInterface):
 
             return "Successfully terminated instance " + name
 
-    def ApplyConnectivityChanges(self, context, request):
-        """
-        Respond to CloudShell Server's request to apply L2 Connectivity changes 
-        Implemented as empty implementation (always succeeds)
-        :param context: ResourceCommandContext
-        :param request: Changes to perform
-        :return: 
-        """
-        api = CloudShellSessionContext(context).get_api()
-        resource_config = Gns3CloudProviderDataModel.create_from_context(context)
-        with resource_config.get_logger() as logger:
-            logger.info("-"*10)
-            logger.info(request)
-            logger.info("-"*10)
-            logger.info(type(request))
-            logger.info("-"*10)
-
-        # Write request
-        request_json = json.loads(request)
-
-        # Build Response
-        action_results = [
-            {
-                "actionId": str(actionResult['actionId']),
-                "type": str(actionResult['type']),
-                "infoMessage": "",
-                "errorMessage": "",
-                "success": "True",
-                "updatedInterface": "None",
-            } for actionResult in request_json['driverRequest']['actions']
-        ]
-
-        return set_command_result(str({"driverResponse": {"actionResults": action_results}}), False)
+    # def ApplyConnectivityChanges(self, context, request):
+    #     """
+    #     Respond to CloudShell Server's request to apply L2 Connectivity changes
+    #     Implemented as empty implementation (always succeeds)
+    #     :param context: ResourceCommandContext
+    #     :param request: Changes to perform
+    #     :return:
+    #     """
+    #     api = CloudShellSessionContext(context).get_api()
+    #     resource_config = Gns3CloudProviderDataModel.create_from_context(context)
+    #     with resource_config.get_logger() as logger:
+    #         logger.info("-"*10)
+    #         logger.info(request)
+    #         logger.info("-"*10)
+    #         logger.info(type(request))
+    #         logger.info("-"*10)
+    #
+    #     # Write request
+    #     request_json = json.loads(request)
+    #
+    #     # Build Response
+    #     action_results = [
+    #         {
+    #             "actionId": str(actionResult['actionId']),
+    #             "type": str(actionResult['type']),
+    #             "infoMessage": "",
+    #             "errorMessage": "",
+    #             "success": "True",
+    #             "updatedInterface": "None",
+    #         } for actionResult in request_json['driverRequest']['actions']
+    #     ]
+    #
+    #     return set_command_result(str({"driverResponse": {"actionResults": action_results}}), False)
 
     def remote_refresh_ip(self, context, cancellation_context, ports):
         """ Refresh the IP of the resource from the VM
@@ -308,7 +307,12 @@ class Gns3CloudProviderDriver(ResourceDriverInterface):
             gns_helper = Gns3Helper(rest_client=rest_client,
                                     logger=logger,
                                     resource_config=resource_config)
-            project_id = gns_helper.create_project()
+            try:
+                project_id = gns_helper.get_project_id()
+            except RestClientException:
+                pass
+            if not project_id:
+                project_id = gns_helper.create_project()
 
             prepare_network_result = PrepareCloudInfraResult(vcn_action_id)
             prepare_network_result.securityGroupId = ""

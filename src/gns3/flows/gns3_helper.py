@@ -1,7 +1,7 @@
 import json
 
 from gns3.rest_client.rest_api_handler import RestJsonClient, RestClientException
-from gns3.shell_helper import Link
+from gns3.helpers.shell_helper import Link
 from gns3.uri_templates import api_templates
 
 
@@ -24,11 +24,11 @@ class Gns3Helper(object):
         return project_id
 
     def get_switch(self, project_id, node_id):
-        url = "/v2/projects/{}/nodes/{}".format(project_id, node_id)
+        url = f"/v2/projects/{project_id}/nodes/{node_id}"
         return self._rest_client.request_get(url)
 
     def get_connected_project_switches(self, project_id, switch):
-        current_links = self._rest_client.request_get("v2/projects/{}/links".format(project_id))
+        current_links = self._rest_client.request_get(f"v2/projects/{project_id}/links")
 
         links = [Link(x.get("nodes"))
                  for x in current_links
@@ -37,11 +37,11 @@ class Gns3Helper(object):
         return links
 
     def get_node_by_id(self, project_id, node_id):
-        return self._rest_client.request_get("v2/projects/{}/nodes/{}".format(project_id, node_id))
+        return self._rest_client.request_get(f"v2/projects/{project_id}/nodes/{node_id}")
 
     def get_available_switch_port(self, project_id, switch):
         mgmt_id = switch.get("node_id")
-        current_links = self._rest_client.request_get("v2/projects/{}/links".format(project_id))
+        current_links = self._rest_client.request_get(f"v2/projects/{project_id}/links")
         switch_ports = {x.get("port_number"): x.get("adapter_number")
                         for x in switch.get("ports")}
         links = {n.get("port_number"): n.get("adapter_number")
@@ -59,7 +59,7 @@ class Gns3Helper(object):
     def get_links(self, project_id=None):
         if not project_id:
             project_id = self.get_project_id()
-        url = "/v2/projects/{}/links".format(project_id)
+        url = f"/v2/projects/{project_id}/links"
         return self._rest_client.request_get(url)
 
     def get_links_per_node(self, project_id, node_id):
@@ -89,28 +89,28 @@ class Gns3Helper(object):
                        if compute.get("compute_id") == name or compute.get("name") == name),
                       None)
         if not result:
-            raise GNS3Error("Unable to find {} Compute node".format(name))
+            raise GNS3Error(f"Unable to find {name} Compute node")
         return result
 
     def get_project_node_by_name(self, project_id, name):
         if not project_id:
             project_id = self.get_project_id()
-        url = "/v2/projects/{}/nodes".format(project_id)
+        url = f"/v2/projects/{project_id}/nodes"
         response = self._rest_client.request_get(url)
         return next((project
                      for project in response
                      if project.get("name") == name),
                     None)
 
-    def get_template_id_by_name(self, project_id, name):
-        url = "/v2/templates".format(project_id)
+    def get_template_id_by_name(self, name):
+        url = "/v2/templates"
         response = self._rest_client.request_get(url)
         result = next((template.get("template_id")
                        for template in response
                        if template.get("name") == name),
                       None)
         if not result:
-            raise GNS3Error("Failed to get Template ID, for {}".format(name))
+            raise GNS3Error(f"Failed to get Template ID, for {name}")
         return result
 
     def create_project(self):
@@ -126,7 +126,7 @@ class Gns3Helper(object):
                 "x": x,
                 "y": y
                 }
-        url = "/v2/projects/{}/templates/39e257dc-8412-3174-b6b3-0ee3ed6a43e9".format(project_id)
+        url = f"/v2/projects/{project_id}/templates/39e257dc-8412-3174-b6b3-0ee3ed6a43e9"
         cloud = self._rest_client.request_post(url, data=data)
         cloud_id = cloud.get("node_id")
         cloud_port = cloud.get("ports", [])[0].get("port_number")
@@ -143,9 +143,26 @@ class Gns3Helper(object):
     def create_switch(self, project_id, name):
         data = {"compute_id": "local"}
         template_id = "1966b864-93e7-32d5-965f-001384eec461"
-        url = "/v2/projects/{}/templates/1966b864-93e7-32d5-965f-001384eec461".format(project_id)
+        # url = f"/v2/projects/{project_id}/templates/1966b864-93e7-32d5-965f-001384eec461"
         switch = self.create_from_template(project_id=project_id, name=name, template_id=template_id, data=data)
         return switch
+
+    def create_node_from_template(self, project_id, name, template_id, interfaces_count=None, data=None):
+        duplicate_url = f"/v2/templates/{template_id}/duplicate"
+        if interfaces_count:
+            duplicate_template_response = self._rest_client.request_post(duplicate_url)
+            if not duplicate_template_response:
+                raise GNS3Error(f"Failed to create node from template for app {name}")
+            template_id = duplicate_template_response.get("template_id")
+            request_data = {"adapters": interfaces_count, "name": f"{name}-{project_id[-4:]}"}
+            if data:
+                request_data.update(data)
+            self._rest_client.request_put(f"v2/templates/{template_id}", data=json.dumps(request_data))
+
+        result = self.create_from_template(project_id, name, template_id)
+        if interfaces_count:
+            self._rest_client.request_delete(f"/v2/templates/{template_id}")
+        return result
 
     def create_from_template(self, project_id, name, template_id, data=None):
         request_data = {
@@ -155,8 +172,8 @@ class Gns3Helper(object):
         }
         if data:
             request_data.update(data)
-        self._logger.info("Request data: {}".format(request_data))
-        url = "/v2/projects/{}/templates/{}".format(project_id, template_id)
+        self._logger.debug(f"Request data: {request_data}")
+        url = f"/v2/projects/{project_id}/templates/{template_id}"
         switch = self._rest_client.request_post(url, data=request_data)
         switch_id = switch.get("node_id")
         self.update_vm_name(project_id, switch_id, name)
@@ -210,7 +227,7 @@ class Gns3Helper(object):
             ]
 
         }
-        url = "/v2/projects/{}/links".format(project_id)
+        url = f"/v2/projects/{project_id}/links"
 
         self._rest_client.request_post(url, data=link_data)
 
@@ -225,10 +242,10 @@ class Gns3Helper(object):
     def delete_project(self, project_id=None):
         if not project_id:
             project_id = self.get_project_id()
-        response = self._rest_client.request_delete("v2/projects/{}".format(project_id))
+        response = self._rest_client.request_delete(f"v2/projects/{project_id}")
         return response
 
     def update_vm_name(self, project_id, node_id, new_name):
-        data = '{{"name": "{}"}}'.format(new_name)
-        response = self._rest_client.request_put("v2/projects/{}/nodes/{}".format(project_id, node_id), data)
+        data = {"name": new_name}
+        response = self._rest_client.request_put(f"v2/projects/{project_id}/nodes/{node_id}", json.dumps(data))
         return response

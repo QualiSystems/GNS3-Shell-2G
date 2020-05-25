@@ -20,6 +20,16 @@ node_types:
         type: string
         description: Name of the template.
         tags: [user_input,editable_only_in_app_template]
+      Connect To Management Network:
+        type: boolean
+        default: True
+        description: Please set this to false if you do not want automatically add first interface to the management network
+        tags: [user_input]
+      Shrink Network Adapters:
+        type: boolean
+        default: False
+        description: Please set this to True in case you want to shrink amount of network adapters to the amount that is actually used in the Blueprint
+        tags: [user_input]
       Additional Configuration:
         type: string
         default:
